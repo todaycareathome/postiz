@@ -1,0 +1,19 @@
+limit.maxSearchAttributes:
+  - value: 200
+limit.typeMaxSearchAttributes:
+  - value:
+      Text: 100
+      Keyword: 100
+      Int: 100
+      Double: 100
+      Bool: 100
+      Datetime: 100
+      KeywordList: 100
+limit.searchAttributesNumberOfKeys:
+  - value: 100
+limit.maxSearchAttributesPerExecution:
+  - value: 100
+limit.searchAttributesSizeOfValue:
+  - value: 2048
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true

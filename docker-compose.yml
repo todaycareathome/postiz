@@ -1,0 +1,101 @@
+services:
+  # ---------------------------------------------------------------------------
+  # Postiz 主程式
+  # ---------------------------------------------------------------------------
+  postiz:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    container_name: postiz
+    restart: always
+    ports:
+      - "4007:5000"
+    environment:
+      - PORT=3000
+      - SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES=true
+      - TEMPORAL_SKIP_SEARCH_ATTRIBUTES=true
+      - MAIN_URL=https://${DOMAIN}
+      - NEXT_PUBLIC_BACKEND_URL=https://${DOMAIN}/api
+      - FRONTEND_URL=https://${DOMAIN}
+      - BACKEND_INTERNAL_URL=http://localhost:3000
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?schema=public
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://postiz-redis:6379
+      - STORAGE_PROVIDER=local
+      - UPLOAD_DIRECTORY=/app/uploads
+      - IS_DOCKER=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - postiz-uploads:/app/uploads
+    depends_on:
+      postiz-redis:
+        condition: service_started
+      temporal-setup:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # Temporal 排程引擎
+  # ---------------------------------------------------------------------------
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: temporal
+    restart: always
+    environment:
+      - DB=postgres12
+      - ENABLE_ES=false
+      - USE_ADVANCED_VISIBILITY=true
+      - SKIP_SCHEMA_SETUP=false
+      - SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES=true
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_SEEDS=host.docker.internal
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=temporal
+      - POSTGRES_VISIBILITY_DATABASE=temporal_visibility
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Temporal 自動初始化屬性 (修復語法錯誤)
+  # ---------------------------------------------------------------------------
+  temporal-setup:
+    image: temporalio/auto-setup:1.24.2
+    container_name: temporal-setup
+    depends_on:
+      temporal:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Temporal API..."
+        temporal operator search-attribute remove --name CustomTextField --address temporal:7233 || true
+        temporal operator search-attribute remove --name CustomStringField --address temporal:7233 || true
+        temporal operator search-attribute create --name PostId --type Keyword --address temporal:7233 || true
+        temporal operator search-attribute create --name IntegrationId --type Keyword --address temporal:7233 || true
+        temporal operator search-attribute create --name OrganizationId --type Keyword --address temporal:7233 || true
+        temporal operator search-attribute create --name UserId --type Keyword --address temporal:7233 || true
+        echo "Temporal search attributes initialized successfully!"
+
+  # ---------------------------------------------------------------------------
+  # Redis 快取與隊列
+  # ---------------------------------------------------------------------------
+  postiz-redis:
+    image: redis:7-alpine
+    container_name: postiz-redis
+    restart: always
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postiz-uploads:
+  redis-data:
+
