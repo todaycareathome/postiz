@@ -10,6 +10,7 @@ services:
       - "4007:5000"
     environment:
       - PORT=3000
+      - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-true}
       - SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES=true
       - TEMPORAL_SKIP_SEARCH_ATTRIBUTES=true
       - MAIN_URL=https://${DOMAIN}
@@ -19,7 +20,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?schema=public
       - TEMPORAL_ADDRESS=temporal:7233
-      - REDIS_URL=redis://postiz-redis:6379
+      - REDIS_URL=redis://postiz-redis:6379/0
       - STORAGE_PROVIDER=local
       - UPLOAD_DIRECTORY=/app/uploads
       - IS_DOCKER=true
@@ -92,6 +93,8 @@ services:
     image: redis:7-alpine
     container_name: postiz-redis
     restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
 
